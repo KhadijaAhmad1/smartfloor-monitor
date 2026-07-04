@@ -2,7 +2,6 @@
 
 **Live OEE, on-time delivery risk, and predictive analytics for manufacturing shop floors — built as a self-contained, offline-capable demonstrator.**
 
-[View the live demo](#) · [Read the methodology](#methodology) · [Dataset schema](#dataset)
 
 ---
 
@@ -10,13 +9,13 @@
 
 Small and medium manufacturers running precision engineering and job-shop production often have no live visibility into their own production floor. A machine can sit idle for two hours before anyone notices. Priorities are set by instinct rather than data. Whether today's order book will hit its delivery commitments is something nobody finds out until it's already too late to act.
 
-This is a well-studied problem in large automotive and aerospace plants with mature IT infrastructure. It is far less studied in the mixed-fleet SME context — a shop floor with machines spanning fifteen years of age, no existing data infrastructure, and a constrained budget for instrumentation. That gap is what this project explores.
+This is a well-studied problem in large automotive and aerospace plants with mature IT infrastructure. It is far less studied in the mixed-fleet SME context, a shop floor with machines spanning fifteen years of age, no existing data infrastructure, and a constrained budget for instrumentation. That gap is what this project explores.
 
 ## What this is
 
-SmartFloor Monitor is a single-file, offline-capable web dashboard that demonstrates how a live machine signal can be turned into an actionable business decision — specifically, whether a time-sensitive order is at risk of missing its delivery commitment, and what to do about it right now.
+SmartFloor Monitor is a single-file, offline-capable web dashboard that demonstrates how a live machine signal can be turned into an actionable business decision, specifically, whether a time-sensitive order is at risk of missing its delivery commitment, and what to do about it right now.
 
-It is built around one machine — a fibre laser cutting cell — chosen because in a typical job-shop flow, the cutting stage is the pacemaker for everything downstream. If the laser falls behind, every subsequent process stage falls behind with it.
+It is built around one machine, a fibre laser cutting cell,  chosen because in a typical job-shop flow, the cutting stage is the pacemaker for everything downstream. If the laser falls behind, every subsequent process stage falls behind with it.
 
 The dashboard has four views:
 
@@ -31,13 +30,13 @@ This isn't a static mockup. The on-time risk model, the OEE engine, and all four
 
 ## Methodology
 
-Every prediction method was deliberately chosen to be explainable rather than maximally sophisticated. In a real deployment, the people relying on this system — shop floor operators and supervisors — need to trust it and be able to reason about why it says what it says. A black-box model that nobody on the floor understands will not get adopted, no matter how accurate it is.
+Every prediction method was deliberately chosen to be explainable rather than maximally sophisticated. In a real deployment, the people relying on this system, shop floor operators and supervisors, need to trust it and be able to reason about why it says what it says. A black-box model that nobody on the floor understands will not get adopted, no matter how accurate it is.
 
 | Prediction | Method | Why this method |
 |---|---|---|
 | End-of-shift OEE forecast | Exponential smoothing (α = 0.45) blended with 14-day historical mean | Gives more weight to today's emerging pattern than to history, while staying interpretable in one sentence |
 | On-time delivery confidence | Monte Carlo simulation, 2,000 runs sampling the historical availability distribution | Communicates uncertainty directly as a probability, rather than a single point estimate that hides how confident the system actually is |
-| Predictive maintenance | Rolling mean of interval between maintenance events | No ML required — pure pattern recognition on data the machine already generates |
+| Predictive maintenance | Rolling mean of interval between maintenance events | No ML required, pure pattern recognition on data the machine already generates |
 | Scenario planning | Historical mean downtime profile, recalculated under a hypothetical intervention | Direct arithmetic on real data; answers "what if we fixed X" without inventing model structure the data can't support |
 
 A methodological note on validity: demonstrating an OEE improvement is genuinely caused by an intervention (rather than confounded by seasonal order mix, operator turnover, or the Hawthorne effect) requires a proper before/after design with tracked confounding variables, not just a before/after number. This project is structured as a foundation for that kind of evaluation, not a claim that it has already been done.
@@ -51,7 +50,7 @@ Machine signal  →  Edge device  →  Local store  →  Dashboard
  native controller)                  DB)               zero dependencies)
 ```
 
-The capture layer is designed to work on legacy machines with no digital output, using a clip-on current sensor that requires no controller access and no machine downtime to install — as well as on newer machines with native Modbus or OPC-UA interfaces. Capture is always read-only.
+The capture layer is designed to work on legacy machines with no digital output, using a clip-on current sensor that requires no controller access and no machine downtime to install, as well as on newer machines with native Modbus or OPC-UA interfaces. Capture is always read-only.
 
 ## Dataset
 
@@ -64,7 +63,7 @@ All data is synthetic, generated to reflect realistic values for a busy fibre la
 
 ## Tech stack
 
-Pure HTML, CSS and vanilla JavaScript. No build step, no framework, no external dependencies — the entire dashboard, including chart rendering, runs from a single file and works fully offline. This was a deliberate constraint: any environment that can open a web browser can run this, with no installation, no internet connection, and no compatibility risk.
+Pure HTML, CSS and vanilla JavaScript. No build step, no framework, no external dependencies, the entire dashboard, including chart rendering, runs from a single file and works fully offline. This was a deliberate constraint: any environment that can open a web browser can run this, with no installation, no internet connection, and no compatibility risk.
 
 ## Running it
 
@@ -86,7 +85,7 @@ This demonstrator represents the first phase of a larger applied research direct
 
 ## About
 
-Built by Khadija Ahmad — Dev Support Engineer and AI Innovation Lead, with a background in computer science (BSc, First Class) and AI and data science (MSc, Distinction). This project sits alongside other applied AI and data engineering work exploring how manufacturing SMEs can build production-grade data infrastructure without the IT budgets of large enterprise plants.
+Built by Khadija Ahmad — AI Innovation Lead, with a background in computer science (BSc, First Class) and AI and data science (MSc, Distinction). This project sits alongside other applied AI and data engineering work exploring how manufacturing SMEs can build production-grade data infrastructure without the IT budgets of large enterprise plants.
 
 ## License
 
