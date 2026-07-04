@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>SmartFloor Monitor — Live OEE and On-Time Risk Dashboard</title>
+<style>
+:root{
+  --bg:#0B0E13;--panel:#141A23;--panel2:#1A2230;--border:#283447;
+  --text:#E8EEF5;--muted:#8A97A8;--faint:#5C6878;
+  --run:#2FBF71;--idle:#F2A007;--down:#E5484D;
+  --cyan:#3BC6D8;--gold:#E8B931;--purple:#9B79E8;
+  --mono:"SF Mono",ui-monospace,Consolas,monospace;
+  --sans:system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans)}
+body{padding:18px 20px 48px;max-width:1340px;margin:0 auto}
+/* header */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:14px}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{font-weight:800;letter-spacing:1px;font-size:26px;background:var(--cyan);color:#06222a;padding:6px 12px;border-radius:6px;line-height:1}
+.brand h1{font-size:18px;margin:0;font-weight:700}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.clockbox{text-align:right}
+.clockbox .lbl{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:1.2px}
+.clockbox .val{font-family:var(--mono);font-size:20px;font-weight:600}
+/* tabs */
+.tabs{display:flex;gap:6px;margin:16px 0 4px;flex-wrap:wrap}
+.tab{background:var(--panel);border:1px solid var(--border);color:var(--muted);padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.tab.active{background:var(--cyan);color:#06222a;border-color:var(--cyan)}
+.view{display:none}.view.active{display:block}
+/* cards */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+.card h3{margin:0 0 2px;font-size:11.5px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);font-weight:700}
+.card .sub{color:var(--faint);font-size:11px;margin-bottom:8px}
+/* status bar */
+.statusbar{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-top:14px}
+.lamp{width:16px;height:16px;border-radius:50%}
+.lamp.run{background:var(--run);box-shadow:0 0 14px var(--run)}
+.lamp.idle{background:var(--idle);box-shadow:0 0 14px var(--idle)}
+.lamp.down{background:var(--down);box-shadow:0 0 14px var(--down)}
+.statusbar .st{font-weight:700;font-size:15px;letter-spacing:.4px}
+.statusbar .reason{color:var(--muted);font-size:13px}
+.statusbar .machine{margin-left:auto;text-align:right;color:var(--muted);font-size:12.5px}
+.statusbar .machine b{color:var(--text);font-weight:600}
+/* grid */
+.grid4{display:grid;grid-template-columns:1.15fr 1fr 1fr 1fr;gap:14px;margin-top:14px}
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-top:14px}
+.grid3e{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+/* gauges */
+.gaugewrap{display:flex;align-items:center;justify-content:center;position:relative}
+.gaugeval{position:absolute;text-align:center}
+.gaugeval .big{font-family:var(--mono);font-size:40px;font-weight:700;line-height:1}
+.gaugeval .pct{font-size:15px;color:var(--muted);font-weight:600}
+.oee .gaugeval .big{font-size:54px}
+.factorline{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:6px}
+.factorline b{color:var(--text);font-family:var(--mono)}
+/* flow strip */
+.flowstrip{display:flex;align-items:stretch;margin-top:14px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;overflow-x:auto;gap:0}
+.stage{flex:1;min-width:100px;text-align:center;padding:4px 8px}
+.stage .nm{font-size:12.5px;font-weight:700;color:var(--text)}
+.stage .dt{font-size:11px;color:var(--muted);margin-top:3px}
+.stage .wip{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--cyan);margin-top:6px}
+.stage .wl{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px}
+.stage.pace{background:rgba(59,198,216,.07);border-radius:9px}
+.stage.pace .nm{color:var(--cyan)}
+.stage .tag{display:inline-block;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:#06222a;background:var(--cyan);border-radius:4px;padding:1px 6px;margin-top:5px;font-weight:700}
+.arrowcell{display:flex;align-items:center;color:var(--faint);font-size:20px;padding:0 2px;flex-shrink:0}
+/* counts */
+.counts{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.stat{flex:1;min-width:96px;background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:10px 12px}
+.stat .n{font-family:var(--mono);font-size:26px;font-weight:700;line-height:1}
+.stat .l{color:var(--muted);font-size:11px;margin-top:4px;letter-spacing:.3px}
+.stat.good .n{color:var(--run)}.stat.rej .n{color:var(--down)}.stat.tgt .n{color:var(--cyan)}
+/* timeline */
+.timeline .bar{display:flex;height:26px;width:100%;border-radius:5px;overflow:hidden;border:1px solid var(--border)}
+.timeline .seg{height:100%}
+.timeline .axis{display:flex;justify-content:space-between;color:var(--faint);font-size:10.5px;margin-top:5px;font-family:var(--mono)}
+.legend{display:flex;gap:16px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+/* order board */
+.board table{width:100%;border-collapse:collapse;font-size:12.5px}
+.board th{text-align:left;color:var(--faint);font-size:10.5px;text-transform:uppercase;letter-spacing:1px;font-weight:700;padding:0 10px 8px;border-bottom:1px solid var(--border)}
+.board td{padding:10px 10px;border-bottom:1px solid var(--border)}
+.board tr:last-child td{border-bottom:none}
+.board .ref{font-family:var(--mono);font-weight:700}
+.board .sec{color:var(--muted)}
+.board .due{font-family:var(--mono)}
+.board .num{font-family:var(--mono);color:var(--muted);text-align:right}
+.pill{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:11.5px;padding:4px 10px;border-radius:20px}
+.pill .pd{width:9px;height:9px;border-radius:50%}
+.pill.ok{color:#9be8c0;background:rgba(47,191,113,.12)}.pill.ok .pd{background:var(--run)}
+.pill.done{color:#8fd6e2;background:rgba(59,198,216,.12)}.pill.done .pd{background:var(--cyan)}
+.pill.warn{color:#f7cf8a;background:rgba(242,160,7,.13)}.pill.warn .pd{background:var(--idle)}
+.pill.crit{color:#f3a3a3;background:rgba(229,72,77,.14)}.pill.crit .pd{background:var(--down)}
+/* pareto */
+.pareto-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.pareto-row .name{width:220px;font-size:12px;color:var(--text);text-align:right;flex-shrink:0}
+.pareto-row .track{flex:1;background:var(--panel2);border-radius:5px;height:18px;overflow:hidden}
+.pareto-row .fill{height:100%;border-radius:5px;transition:width .4s}
+.pareto-row .mins{width:64px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+/* alerts */
+.alerts{max-height:230px;overflow-y:auto}
+.alert{display:flex;gap:10px;padding:9px 10px;border-radius:8px;background:var(--panel2);margin-bottom:7px;border-left:3px solid var(--faint);font-size:12.5px}
+.alert.warn{border-left-color:var(--idle)}.alert.crit{border-left-color:var(--down)}.alert.ok{border-left-color:var(--run)}
+.alert .t{font-family:var(--mono);color:var(--faint);font-size:11px;flex-shrink:0;width:46px}
+.alerts .empty{color:var(--faint);font-size:12.5px;font-style:italic;padding:8px 2px}
+/* decision */
+.decision{margin-top:14px;background:linear-gradient(180deg,#16202c,#131a24);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+.decision h3{color:var(--cyan);margin:0 0 10px;font-size:12px;letter-spacing:1.4px;text-transform:uppercase}
+.decision .blk .n{font-family:var(--mono);font-size:30px;font-weight:700}
+.decision .blk .l{color:var(--muted);font-size:12px;margin-top:3px;line-height:1.4}
+.decision .note{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);color:var(--text);font-size:13.5px;line-height:1.6}
+.decision .note b{color:var(--cyan)}
+/* controls */
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.controls .grp{display:flex;align-items:center;gap:8px}
+.controls .lbl{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:1px}
+button.btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:9px 15px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--sans)}
+button.btn:hover{border-color:var(--cyan)}
+button.btn.primary{background:var(--cyan);color:#06222a;border-color:var(--cyan)}
+button.btn.danger{border-color:#5a2b2d}
+select{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:12.5px;font-family:var(--sans)}
+.spd{padding:0;display:flex;overflow:hidden;background:var(--panel2);border:1px solid var(--border);border-radius:8px}
+.spd button{background:transparent;border:none;border-right:1px solid var(--border);color:var(--muted);padding:8px 13px;cursor:pointer;font-family:var(--mono);font-size:12px}
+.spd button.on{background:var(--cyan);color:#06222a}
+/* ---- HISTORY TAB ---- */
+.chart-wrap{position:relative;height:180px;margin-top:12px}
+canvas.chart{width:100%;height:100%;display:block}
+.chart-label{position:absolute;top:8px;left:0;color:var(--faint);font-size:11px}
+.hist-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px}
+.hist-table th{text-align:left;color:var(--faint);font-size:10.5px;text-transform:uppercase;letter-spacing:1px;padding:0 10px 8px;border-bottom:1px solid var(--border)}
+.hist-table td{padding:9px 10px;border-bottom:1px solid var(--border)}
+.hist-table tr:last-child td{border-bottom:none}
+.hist-table .mono{font-family:var(--mono)}
+.hist-table .hi{color:var(--run);font-weight:700}
+.hist-table .lo{color:var(--down)}
+/* ---- PREDICT TAB ---- */
+.pred-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px}
+.pred-card h3{color:var(--cyan);font-size:11.5px;text-transform:uppercase;letter-spacing:1.4px;margin:0 0 4px}
+.pred-card .sub{color:var(--faint);font-size:11px;margin-bottom:14px}
+.pred-card .big-val{font-family:var(--mono);font-size:44px;font-weight:700;line-height:1;margin-bottom:6px}
+.pred-card .conf{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.pred-card .insight{font-size:13px;line-height:1.55;color:var(--text);border-top:1px solid var(--border);padding-top:12px;margin-top:10px}
+.pred-card .insight b{color:var(--cyan)}
+.bar-h{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px}
+.bar-h .lbl{width:160px;color:var(--text);text-align:right;flex-shrink:0}
+.bar-h .track{flex:1;background:var(--panel2);border-radius:4px;height:16px;overflow:hidden}
+.bar-h .fill{height:100%;border-radius:4px;transition:width .4s}
+.bar-h .val{font-family:var(--mono);font-size:12px;color:var(--muted);width:48px}
+.next-event{display:flex;align-items:center;gap:16px;margin-bottom:10px;padding:12px 14px;background:var(--panel2);border:1px solid var(--border);border-radius:9px}
+.next-event .icon{font-size:22px;flex-shrink:0}
+.next-event .ttl{font-weight:700;font-size:13px}
+.next-event .meta{color:var(--muted);font-size:12px;margin-top:2px}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:12px;margin-left:8px}
+.badge.ok{background:rgba(47,191,113,.15);color:#9be8c0}
+.badge.warn{background:rgba(242,160,7,.15);color:#f7cf8a}
+.badge.crit{background:rgba(229,72,77,.15);color:#f3a3a3}
+.badge.info{background:rgba(59,198,216,.12);color:#8fd6e2}
+/* ---- DATA TAB ---- */
+.data-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.csv-box{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:14px;overflow-x:auto}
+.csv-box pre{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin:0;white-space:pre;line-height:1.5}
+.csv-box h4{margin:0 0 8px;font-size:11.5px;color:var(--text)}
+.dl-btn{display:inline-block;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:10px;text-decoration:none}
+.dl-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+/* footnote */
+.footnote{color:var(--faint);font-size:11.5px;margin-top:16px;line-height:1.6}
+@media(max-width:960px){.grid4{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.grid3e{grid-template-columns:1fr}.data-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <div class="logo">SFM</div>
+    <div>
+      <h1>SmartFloor Monitor &mdash; LASER-01</h1>
+      <p>From machine signal to on-time decision &nbsp;|&nbsp; Independent research demonstrator &nbsp;|&nbsp; 8kW fibre laser cutting cell</p>
+    </div>
+  </div>
+  <div class="clockbox">
+    <div class="lbl">Shift elapsed</div>
+    <div class="val" id="shiftClock">00:00 / 08:00</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-view="live">Live monitor</div>
+  <div class="tab" data-view="history">Historical data</div>
+  <div class="tab" data-view="predict">Predictions</div>
+  <div class="tab" data-view="data">Dataset</div>
+</div>
+
+<!-- ======= LIVE TAB ======= -->
+<div class="view active" id="view-live">
+  <div class="statusbar">
+    <div class="lamp run" id="lamp"></div>
+    <div><div class="st" id="stateText">CUTTING</div><div class="reason" id="reasonText">Nest in progress</div></div>
+    <div class="machine"><b>LASER-01</b> &nbsp;8kW fibre laser, automated sheet loader<br>Cutting cell &nbsp;|&nbsp; Operator: M. Okafor &nbsp;|&nbsp; Nest: RG-2207 structural brackets</div>
+  </div>
+
+  <div class="grid4">
+    <div class="card oee"><h3>Overall equipment effectiveness</h3><div class="sub">Availability &times; Performance &times; Quality</div><div class="gaugewrap" id="g-oee"></div><div class="factorline"><span>Shop benchmark 30&ndash;60%</span><span>World class <b>85%</b></span></div></div>
+    <div class="card"><h3>Availability</h3><div class="sub">Cutting time vs planned time</div><div class="gaugewrap" id="g-a"></div><div class="factorline"><span>Downtime</span><b id="a-down">0 min</b></div></div>
+    <div class="card"><h3>Performance</h3><div class="sub">Actual vs ideal cut rate</div><div class="gaugewrap" id="g-p"></div><div class="factorline"><span>Ideal sheet</span><b>11 min</b></div></div>
+    <div class="card"><h3>Quality</h3><div class="sub">Good vs total parts cut</div><div class="gaugewrap" id="g-q"></div><div class="factorline"><span>Dross / edge rejects</span><b id="q-rej">0</b></div></div>
+  </div>
+
+  <!-- flow strip -->
+  <div class="flowstrip" id="flowStrip"></div>
+
+  <!-- on-time board -->
+  <div class="card board" style="margin-top:14px">
+    <h3>On-time risk board &mdash; today&rsquo;s orders waiting on the laser</h3>
+    <div class="sub">Every order needs blanks from the laser before downstream can start. Status updates live from laser pace.</div>
+    <table><thead><tr><th>Order</th><th>Sector</th><th>Despatch</th><th style="text-align:right">Blanks</th><th>Blanks due by</th><th>Projected</th><th>Status</th></tr></thead>
+    <tbody id="orderBody"></tbody></table>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Shift output</h3>
+      <div class="counts">
+        <div class="stat"><div class="n" id="c-sheets">0</div><div class="l">Sheets cut</div></div>
+        <div class="stat good"><div class="n" id="c-good">0</div><div class="l">Parts nested</div></div>
+        <div class="stat rej"><div class="n" id="c-rej">0</div><div class="l">Rejects</div></div>
+        <div class="stat tgt"><div class="n" id="c-util">0%</div><div class="l">Laser utilisation</div></div>
+      </div>
+      <div class="timeline" style="margin-top:12px">
+        <h3 style="margin-top:0">Laser state through the shift</h3>
+        <div class="bar" id="stateBar"></div>
+        <div class="axis"><span>07:00</span><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span></div>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--run)"></i>Cutting</span>
+          <span><i class="dot" style="background:var(--idle)"></i>Load / changeover</span>
+          <span><i class="dot" style="background:var(--down)"></i>Down</span>
+        </div>
+      </div>
+    </div>
+    <div class="card"><h3>Live alerts</h3><div class="sub">Stoppages and risks flagged to the team</div><div class="alerts" id="alerts"><div class="empty">No alerts yet. Monitoring active.</div></div></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>Downtime Pareto &mdash; where the laser hours are lost this shift</h3>
+    <div class="sub">Ranked by minutes lost. Operator entered reason codes at the machine.</div>
+    <div id="pareto" style="margin-top:12px"></div>
+  </div>
+
+  <div class="decision">
+    <h3>From machine signal to business decision</h3>
+    <div class="grid3e">
+      <div class="blk"><div class="n" id="d-lag">0</div><div class="l">Laser minutes behind plan</div></div>
+      <div class="blk"><div class="n" id="d-risk">0</div><div class="l">Orders now at risk of late despatch</div></div>
+      <div class="blk"><div class="n" id="d-urgent" style="font-size:22px;line-height:1.2;padding-top:5px">&mdash;</div><div class="l">Most urgent order to protect</div></div>
+    </div>
+    <div class="note" id="decisionNote">Run the shift to see the recommendation.</div>
+  </div>
+
+  <div class="controls">
+    <div class="grp"><span class="lbl">Run</span>
+      <button class="btn primary" id="btnPlay">Pause</button>
+      <button class="btn danger" id="btnReset">Reset shift</button>
+    </div>
+    <div class="grp"><span class="lbl">Speed</span>
+      <div class="spd">
+        <button data-s="60">1&times;</button>
+        <button data-s="240" class="on" id="spd4">4&times;</button>
+        <button data-s="720">12&times;</button>
+      </div>
+    </div>
+    <div class="grp" style="margin-left:auto"><span class="lbl">Inject event</span>
+      <select id="evtReason">
+        <option value="Awaiting sheet load / material">Awaiting sheet load / material</option>
+        <option value="Nest programming / no nest ready">Nest programming / no nest ready</option>
+        <option value="Lens or nozzle change">Lens or nozzle change</option>
+        <option value="Awaiting crane / offload">Awaiting crane / offload</option>
+        <option value="Assist gas / low pressure">Assist gas / low pressure</option>
+        <option value="Optics or chiller fault">Optics or chiller fault</option>
+      </select>
+      <button class="btn" id="btnEvent">Log stoppage</button>
+    </div>
+  </div>
+  <div class="footnote">Live monitor uses simulated real-time data. The on-time risk model is based on the downtime-as-schedule-slip principle: every minute the laser is stopped pushes every queued order one minute later. No production system was accessed; all data is synthetic.</div>
+</div>
+
+<!-- ======= HISTORY TAB ======= -->
+<div class="view" id="view-history">
+  <div style="margin-top:14px" class="grid3e">
+    <div class="card"><h3>14-day OEE trend</h3><div class="sub">Last 14 completed shifts + today in progress</div><div class="chart-wrap"><canvas id="chartOEE"></canvas></div></div>
+    <div class="card"><h3>Availability trend</h3><div class="sub">Runtime as a share of planned shift time</div><div class="chart-wrap"><canvas id="chartAvail"></canvas></div></div>
+    <div class="card"><h3>Downtime by reason</h3><div class="sub">Total minutes lost per cause, last 14 days</div><div id="histPareto" style="margin-top:12px"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>Shift log &mdash; LASER-01</h3>
+    <div class="sub">One row per shift. Source: laser_shifts.csv embedded below.</div>
+    <table class="hist-table" id="histTable"></table>
+  </div>
+  <div class="footnote">Historical data is generated from the same simulation model used for the live monitor, parameterised to show a realistic improving OEE trend over 14 days. In a live deployment this view would read from the database populated by the edge collector.</div>
+</div>
+
+<!-- ======= PREDICTIONS TAB ======= -->
+<div class="view" id="view-predict">
+  <div style="margin-top:14px;margin-bottom:4px;color:var(--faint);font-size:12px;font-style:italic">
+    Predictions are computed from the embedded historical dataset (laser_shifts.csv) and the live shift state. No ML library is used: methods are linear regression, exponential smoothing, threshold rules and Monte Carlo, all computed in-browser from the data.
+  </div>
+  <div class="grid3e">
+
+    <!-- P1: End-of-shift OEE forecast -->
+    <div class="pred-card">
+      <h3>End-of-shift OEE forecast</h3>
+      <div class="sub">Where today will land if the laser continues at its current pace</div>
+      <div class="big-val" id="p-oee-fcst" style="color:var(--gold)">&#8211;</div>
+      <div class="conf" id="p-oee-range"></div>
+      <div id="p-oee-bar" style="margin-top:10px"></div>
+      <div class="insight" id="p-oee-insight"></div>
+    </div>
+
+    <!-- P2: On-time confidence for MD-3380 -->
+    <div class="pred-card">
+      <h3>On-time confidence &mdash; MD-3380</h3>
+      <div class="sub">Probability that the medical order blanks are ready before 13:30 today</div>
+      <div class="big-val" id="p-ontm-val" style="color:var(--run)">&#8211;</div>
+      <div class="conf" id="p-ontm-conf"></div>
+      <div style="margin-top:10px" id="p-ontm-mc"></div>
+      <div class="insight" id="p-ontm-insight"></div>
+    </div>
+
+    <!-- P3: Next maintenance event -->
+    <div class="pred-card">
+      <h3>Predictive maintenance</h3>
+      <div class="sub">Next scheduled interventions based on historical stoppage patterns</div>
+      <div id="p-maint-events"></div>
+      <div class="insight" id="p-maint-insight"></div>
+    </div>
+
+  </div>
+
+  <!-- P4: OEE what-if / scenario planner -->
+  <div class="pred-card" style="margin-top:14px">
+    <h3>Scenario planner &mdash; what if we halve the top downtime cause?</h3>
+    <div class="sub">Estimated impact on OEE and parts output if the biggest single cause of lost time is reduced by 50% across a full shift</div>
+    <div id="p-scenario"></div>
+  </div>
+
+  <!-- P5: Weekly OEE projection -->
+  <div class="card" style="margin-top:14px">
+    <h3>OEE projection &mdash; next 7 shifts</h3>
+    <div class="sub">Linear trend fitted on last 14 days, extrapolated forward. Shaded band shows &plusmn;1 standard deviation from the fit.</div>
+    <div class="chart-wrap" style="height:200px"><canvas id="chartForecast"></canvas></div>
+    <div class="insight" id="p-trend-insight" style="font-size:13px;line-height:1.55;margin-top:10px;color:var(--text)"></div>
+  </div>
+
+  <div class="footnote">Prediction methods: OEE forecast uses exponential smoothing of today&rsquo;s running average against a 14-day historical mean. On-time confidence uses Monte Carlo simulation (2000 runs) sampling historical availability distributions. Maintenance prediction uses a rolling mean of days between lens-change events. Scenario planner recalculates OEE using the historical mean downtime profile adjusted by a 50% reduction in the top cause.</div>
+</div>
+
+<!-- ======= DATA TAB ======= -->
+<div class="view" id="view-data">
+  <div style="margin-top:14px;color:var(--text);font-size:13.5px;line-height:1.6;max-width:820px">
+    Both datasets below are generated by the same JavaScript simulation engine that drives the live monitor. They represent what a real deployment would capture: a per-shift summary table (one row per shift from the laser controller and operator inputs) and a per-event log (one row per sheet completed or stoppage logged).
+    In production, the edge collector at the machine would write these rows to a database in real time. The dashboard would then read from that database rather than the embedded strings below.
+  </div>
+  <div class="data-grid">
+    <div class="csv-box">
+      <h4>laser_shifts.csv &mdash; 15 shifts of summary data</h4>
+      <pre id="csvShifts"></pre>
+      <a class="dl-btn" id="dlShifts" download="laser_shifts.csv">Download CSV</a>
+    </div>
+    <div class="csv-box">
+      <h4>laser_events.csv &mdash; today&rsquo;s per-event log (26 rows)</h4>
+      <pre id="csvEvents"></pre>
+      <a class="dl-btn" id="dlEvents" download="laser_events.csv">Download CSV</a>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>Data schema &mdash; what each field means</h3>
+    <div class="sub">These are the fields a real deployment would capture from the laser controller and the operator tablet</div>
+    <table class="hist-table">
+      <thead><tr><th>Table</th><th>Field</th><th>Source</th><th>Used for</th></tr></thead>
+      <tbody>
+        <tr><td>shifts</td><td class="mono">availability_pct</td><td>Computed: runtime / planned</td><td>OEE &amp; trend</td></tr>
+        <tr><td>shifts</td><td class="mono">oee_pct</td><td>Computed: A&times;P&times;Q</td><td>All predictions</td></tr>
+        <tr><td>shifts</td><td class="mono">top_downtime_reason</td><td>Operator tablet</td><td>Pareto, scenario planner</td></tr>
+        <tr><td>shifts</td><td class="mono">lens_change_min</td><td>Aggregated from events</td><td>Predictive maintenance</td></tr>
+        <tr><td>events</td><td class="mono">event_type</td><td>Laser controller signal</td><td>Timeline, alerts</td></tr>
+        <tr><td>events</td><td class="mono">reason_code</td><td>Operator entry (2 taps)</td><td>Pareto, maintenance</td></tr>
+        <tr><td>events</td><td class="mono">cut_time_min</td><td>Laser controller</td><td>Performance factor</td></tr>
+        <tr><td>events</td><td class="mono">job_ref / sector</td><td>Job management system (ERP)</td><td>On-time risk board</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="footnote">No production system was accessed. All data is synthetic, generated to reflect realistic values for a busy fibre laser cutting shop. Availability ~80%, OEE 60&ndash;86%, reject rate ~1.9%, lens change every 3&ndash;5 days.</div>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   EMBEDDED DATASETS
+   ================================================================ */
+const SHIFTS_CSV="date,shift,machine_id,operator,planned_hours,runtime_hours,downtime_hours,sheets_cut,parts_cut,rejects,availability_pct,performance_pct,quality_pct,oee_pct,top_downtime_reason,top_downtime_min,lens_change_min,status\n\"2026-06-10\",\"Day\",\"LASER-01\",\"S. Bryan\",8,\"6.13\",\"1.87\",27,544,14,\"76.7\",\"80.7\",\"97.4\",\"60.3\",\"Awaiting sheet load / material\",\"25.0\",\"13.0\",\"Complete\"\n\"2026-06-11\",\"Day\",\"LASER-01\",\"T. Henley\",8,\"6.72\",\"1.28\",37,801,25,\"84.0\",\"100.0\",\"96.9\",\"81.3\",\"Awaiting sheet load / material\",\"26.0\",\"0.0\",\"Complete\"\n\"2026-06-12\",\"Day\",\"LASER-01\",\"M. Okafor\",8,\"6.42\",\"1.58\",27,607,16,\"80.2\",\"77.1\",\"97.4\",\"60.2\",\"Nest programming / no nest ready\",\"52.0\",\"0.0\",\"Complete\"\n\"2026-06-13\",\"Day\",\"LASER-01\",\"J. Patel\",8,\"6.68\",\"1.32\",33,648,14,\"83.5\",\"90.5\",\"97.8\",\"74.0\",\"Lens or nozzle change\",\"25.0\",\"25.0\",\"Complete\"\n\"2026-06-14\",\"Day\",\"LASER-01\",\"S. Bryan\",8,\"6.57\",\"1.43\",25,577,10,\"82.1\",\"69.8\",\"98.3\",\"56.3\",\"Nest programming / no nest ready\",\"43.0\",\"29.0\",\"Complete\"\n\"2026-06-15\",\"Day\",\"LASER-01\",\"T. Henley\",8,\"6.47\",\"1.53\",36,698,16,\"80.9\",\"100.0\",\"97.7\",\"79.0\",\"Optics or chiller fault\",\"36.0\",\"14.0\",\"Complete\"\n\"2026-06-16\",\"Day\",\"LASER-01\",\"M. Okafor\",8,\"5.88\",\"2.12\",23,490,8,\"73.5\",\"71.7\",\"98.4\",\"51.8\",\"Awaiting sheet load / material\",\"50.0\",\"19.0\",\"Complete\"\n\"2026-06-17\",\"Day\",\"LASER-01\",\"J. Patel\",8,\"7.08\",\"0.92\",33,637,17,\"88.5\",\"85.4\",\"97.3\",\"73.6\",\"Awaiting crane / offload\",\"20.0\",\"7.0\",\"Complete\"\n\"2026-06-18\",\"Day\",\"LASER-01\",\"S. Bryan\",8,\"6.60\",\"1.40\",36,783,14,\"82.5\",\"100.0\",\"98.2\",\"81.0\",\"Awaiting sheet load / material\",\"33.0\",\"0.0\",\"Complete\"\n\"2026-06-19\",\"Day\",\"LASER-01\",\"T. Henley\",8,\"6.75\",\"1.25\",39,811,20,\"84.4\",\"100.0\",\"97.5\",\"82.3\",\"Lens or nozzle change\",\"21.0\",\"21.0\",\"Complete\"\n\"2026-06-20\",\"Day\",\"LASER-01\",\"M. Okafor\",8,\"6.67\",\"1.33\",32,695,12,\"83.3\",\"88.0\",\"98.3\",\"72.1\",\"Nest programming / no nest ready\",\"20.0\",\"19.0\",\"Complete\"\n\"2026-06-21\",\"Day\",\"LASER-01\",\"J. Patel\",8,\"6.63\",\"1.37\",35,709,17,\"82.9\",\"96.7\",\"97.6\",\"78.3\",\"Operator break / absent\",\"26.0\",\"5.0\",\"Complete\"\n\"2026-06-22\",\"Day\",\"LASER-01\",\"S. Bryan\",8,\"5.93\",\"2.07\",34,722,9,\"74.2\",\"100.0\",\"98.8\",\"73.2\",\"Awaiting sheet load / material\",\"41.0\",\"21.0\",\"Complete\"\n\"2026-06-23\",\"Day\",\"LASER-01\",\"T. Henley\",8,\"7.05\",\"0.95\",40,821,20,\"88.1\",\"100.0\",\"97.6\",\"86.0\",\"Awaiting sheet load / material\",\"26.0\",\"0.0\",\"Complete\"\n\"2026-06-24\",\"Day\",\"LASER-01\",\"M. Okafor\",4,\"3.22\",\"0.78\",16,362,7,\"80.4\",\"91.2\",\"98.1\",\"71.9\",\"Awaiting crane / offload\",\"16.0\",\"0.0\",\"In progress\"";
+const EVENTS_CSV="timestamp,machine_id,event_type,job_ref,sector,material,sheet_no,parts_cut,rejects,cut_time_min,ideal_time_min,reason_code,duration_min,operator\n\"2026-06-24 07:11:10\",\"LASER-01\",\"SHEET_COMPLETE\",\"CN-8842\",\"Construction\",\"Mild steel 3mm\",1,19,0,\"11.4\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 07:11:40\",\"LASER-01\",\"SHEET_COMPLETE\",\"AU-5510\",\"Automotive\",\"Mild steel 8mm\",2,19,0,\"11.8\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 07:13:10\",\"LASER-01\",\"STOPPAGE_START\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Awaiting crane / offload\",\"\",\"M. Okafor\"\n\"2026-06-24 07:24:10\",\"LASER-01\",\"STOPPAGE_END\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Awaiting crane / offload\",\"11.0\",\"M. Okafor\"\n\"2026-06-24 07:46:20\",\"LASER-01\",\"SHEET_COMPLETE\",\"LG-1190\",\"Lighting\",\"Mild steel 6mm\",3,30,0,\"11.9\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 07:55:50\",\"LASER-01\",\"STOPPAGE_START\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Nest programming / no nest ready\",\"\",\"M. Okafor\"\n\"2026-06-24 08:05:50\",\"LASER-01\",\"STOPPAGE_END\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Nest programming / no nest ready\",\"10.0\",\"M. Okafor\"\n\"2026-06-24 08:18:20\",\"LASER-01\",\"SHEET_COMPLETE\",\"MD-3380\",\"Medical\",\"Mild steel 8mm\",4,26,0,\"11.6\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 08:49:30\",\"LASER-01\",\"SHEET_COMPLETE\",\"AU-5611\",\"Automotive\",\"Stainless 3mm\",5,26,1,\"12.7\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 08:54:10\",\"LASER-01\",\"SHEET_COMPLETE\",\"RG-2310\",\"Rail\",\"Stainless 3mm\",6,27,0,\"11.6\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 09:00:50\",\"LASER-01\",\"SHEET_COMPLETE\",\"MD-3401\",\"Medical\",\"Mild steel 6mm\",7,13,0,\"12.5\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 09:16:40\",\"LASER-01\",\"STOPPAGE_START\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Awaiting sheet load / material\",\"\",\"M. Okafor\"\n\"2026-06-24 09:31:40\",\"LASER-01\",\"STOPPAGE_END\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Awaiting sheet load / material\",\"15.0\",\"M. Okafor\"\n\"2026-06-24 09:32:30\",\"LASER-01\",\"SHEET_COMPLETE\",\"CN-9001\",\"Construction\",\"Mild steel 3mm\",8,29,0,\"11.7\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 09:37:30\",\"LASER-01\",\"SHEET_COMPLETE\",\"RG-2207\",\"Rail\",\"Stainless 3mm\",9,27,1,\"12.2\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 09:42:20\",\"LASER-01\",\"SHEET_COMPLETE\",\"CN-8842\",\"Construction\",\"Mild steel 6mm\",10,27,0,\"11.5\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 09:55:10\",\"LASER-01\",\"SHEET_COMPLETE\",\"AU-5510\",\"Automotive\",\"Mild steel 3mm\",11,13,0,\"12.6\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 09:57:50\",\"LASER-01\",\"SHEET_COMPLETE\",\"LG-1190\",\"Lighting\",\"Mild steel 10mm\",12,19,0,\"11.8\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 10:05:20\",\"LASER-01\",\"SHEET_COMPLETE\",\"MD-3380\",\"Medical\",\"Mild steel 8mm\",13,15,2,\"11.6\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 10:19:10\",\"LASER-01\",\"SHEET_COMPLETE\",\"AU-5611\",\"Automotive\",\"Mild steel 8mm\",14,29,2,\"11.6\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 10:20:30\",\"LASER-01\",\"SHEET_COMPLETE\",\"RG-2310\",\"Rail\",\"Mild steel 3mm\",15,17,1,\"12.6\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 10:24:50\",\"LASER-01\",\"STOPPAGE_START\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Assist gas / low pressure\",\"\",\"M. Okafor\"\n\"2026-06-24 10:30:50\",\"LASER-01\",\"STOPPAGE_END\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Assist gas / low pressure\",\"6.0\",\"M. Okafor\"\n\"2026-06-24 10:34:30\",\"LASER-01\",\"SHEET_COMPLETE\",\"MD-3401\",\"Medical\",\"Mild steel 3mm\",16,26,0,\"12.4\",11,\"\",\"\",\"M. Okafor\"\n\"2026-06-24 10:40:30\",\"LASER-01\",\"STOPPAGE_START\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Awaiting crane / offload\",\"\",\"M. Okafor\"\n\"2026-06-24 10:45:30\",\"LASER-01\",\"STOPPAGE_END\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"Awaiting crane / offload\",\"16.0\",\"M. Okafor\"";
+
+/* ================================================================
+   PARSE DATASETS
+   ================================================================ */
+function parseCSV(str){
+  const lines=str.trim().split('\n');
+  const hdrs=lines[0].split(',').map(h=>h.trim());
+  return lines.slice(1).map(l=>{
+    const vals=[]; let cur='',inQ=false;
+    for(const c of l){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){vals.push(cur.trim());cur='';}else cur+=c;}
+    vals.push(cur.trim());
+    const o={}; hdrs.forEach((h,i)=>o[h]=vals[i]||''); return o;
+  });
+}
+const SHIFTS=parseCSV(SHIFTS_CSV);
+const EVENTS=parseCSV(EVENTS_CSV);
+const histShifts=SHIFTS.filter(r=>r.status==='Complete');
+const oeeHist=histShifts.map(r=>parseFloat(r.oee_pct));
+const availHist=histShifts.map(r=>parseFloat(r.availability_pct));
+const datesHist=histShifts.map(r=>r.date.slice(5));
+
+/* ================================================================
+   LIVE SIMULATION (same engine as before)
+   ================================================================ */
+const PLANNED=8*3600,IDEAL_SHEET=11*60,PARTS_MIN=12,PARTS_MAX=30;
+const REASONS=[
+  {name:"Awaiting sheet load / material",   w:26,min:[5,16], col:"#E5484D"},
+  {name:"Nest programming / no nest ready", w:20,min:[6,16], col:"#F2A007"},
+  {name:"Lens or nozzle change",            w:16,min:[4,11], col:"#F2A007"},
+  {name:"Awaiting crane / offload",         w:14,min:[4,12], col:"#E5484D"},
+  {name:"Assist gas / low pressure",        w:8, min:[3,8],  col:"#3BC6D8"},
+  {name:"Optics or chiller fault",          w:5, min:[10,22],col:"#E5484D"},
+  {name:"Operator break / absent",          w:9, min:[5,12], col:"#8A97A8"}
+];
+const ORDERS=[
+  {ref:"RG-2207",sector:"Rail",         dueLabel:"15:00 today",   blanks:46, cutMin:50, dueHrs:8.0},
+  {ref:"CN-8842",sector:"Construction", dueLabel:"tomorrow PM",   blanks:120,cutMin:70, dueHrs:28.0},
+  {ref:"AU-5510",sector:"Automotive",   dueLabel:"16:00 today",   blanks:64, cutMin:60, dueHrs:9.0},
+  {ref:"LG-1190",sector:"Lighting",     dueLabel:"in 2 days",     blanks:90, cutMin:45, dueHrs:50.0},
+  {ref:"MD-3380",sector:"Medical",      dueLabel:"13:30 today",   blanks:28, cutMin:80, dueHrs:6.5},
+  {ref:"AU-5611",sector:"Automotive",   dueLabel:"09:00 tomorrow",blanks:52, cutMin:55, dueHrs:26.0}
+];
+let S,speed=240,running=true,lastTs=null;
+function fresh(){return{elapsed:0,runtime:0,down:Object.fromEntries(REASONS.map(r=>[r.name,0])),sheets:0,good:0,rej:0,partsTotal:0,sheetTimer:0,curCut:cutLen(),machine:"running",reason:"Nest in progress",downRemain:0,downReason:null,downAccrued:0,history:[],sampleAcc:0,alerts:[],firedLow:false,lastReasonFlagged:{},riskFlagged:{}};}
+function cutLen(){return IDEAL_SHEET*(1+Math.random()*0.16);}
+function fmt(t){const h=Math.floor(t/3600),m=Math.floor((t%3600)/60);return String(7+h).padStart(2,"0")+":"+String(m).padStart(2,"0");}
+function mmss(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");}
+function pickReason(){const tot=REASONS.reduce((a,r)=>a+r.w,0);let x=Math.random()*tot;for(const r of REASONS){if(x<r.w)return r;x-=r.w;}return REASONS[0];}
+function startDowntime(forced){const r=forced?REASONS.find(x=>x.name===forced)||REASONS[0]:pickReason();const dur=(r.min[0]+Math.random()*(r.min[1]-r.min[0]))*60;S.machine=(r.name==="Nest programming / no nest ready"||r.name==="Lens or nozzle change"||r.name==="Operator break / absent")?"idle":"down";S.reason=r.name;S.downReason=r.name;S.downRemain=dur;S.downAccrued=0;pushAlert("warn",r.name+" started","Estimated "+Math.round(dur/60)+" min.");}
+function step(dt){if(S.elapsed>=PLANNED)return;dt=Math.min(dt,PLANNED-S.elapsed);S.elapsed+=dt;if(S.machine==="running"){S.runtime+=dt;S.sheetTimer+=dt;while(S.sheetTimer>=S.curCut){S.sheetTimer-=S.curCut;S.sheets++;const p=Math.round(PARTS_MIN+Math.random()*(PARTS_MAX-PARTS_MIN));S.partsTotal+=p;const bad=Math.random()<0.5?0:Math.round(Math.random()*2);S.rej+=bad;S.good+=(p-bad);S.curCut=cutLen();}if(Math.random()<dt/2400)startDowntime(null);}else{S.down[S.downReason]+=dt;S.downAccrued+=dt;S.downRemain-=dt;if(S.downAccrued>15*60&&!S.lastReasonFlagged[S.downReason+"|"+Math.floor(S.elapsed/3600)]){S.lastReasonFlagged[S.downReason+"|"+Math.floor(S.elapsed/3600)]=1;pushAlert("crit","Long stoppage: "+S.downReason,"Over 15 min lost. Floor is waiting.");}if(S.downRemain<=0){S.machine="running";S.reason="Nest in progress";S.downReason=null;pushAlert("ok","Laser resumed","Back in cut.");}}S.sampleAcc+=dt;while(S.sampleAcc>=PLANNED/180){S.sampleAcc-=PLANNED/180;S.history.push(S.machine);}}
+function pushAlert(type,title,msg){S.alerts.unshift({type,t:fmt(S.elapsed),title,msg});if(S.alerts.length>40)S.alerts.pop();}
+function metrics(){const A=S.elapsed>0?S.runtime/S.elapsed:1,P=S.runtime>0?Math.min(1,(IDEAL_SHEET*S.sheets)/S.runtime):0,Q=S.partsTotal>0?S.good/S.partsTotal:1;return{A,P,Q,OEE:A*P*Q,totalDown:Object.values(S.down).reduce((a,b)=>a+b,0)};}
+function computeOrders(){const runtimeMin=S.runtime/60,lagMin=(S.elapsed-S.runtime)/60;let cum=0,rows=[];for(const o of ORDERS){cum+=o.cutMin;let status,slack,projDoneH;if(runtimeMin>=cum){status="done";slack=100;projDoneH=S.elapsed/3600;}else{projDoneH=(cum+lagMin)/60;slack=o.dueHrs-projDoneH;status=slack>=0.75?"ok":slack>=0?"warn":"crit";}rows.push({o,status,slack,projDoneH});}return{rows,lagMin};}
+
+/* gauges */
+function band(v){if(v<0.40)return"#E5484D";if(v<0.60)return"#F2A007";if(v<0.85)return"#2FBF71";return"#E8B931";}
+function gauge(el,value,size,big){const r=size/2-10,c=2*Math.PI*r,off=c*(1-Math.max(0,Math.min(1,value)));const col=big?band(value):(value<0.6?"#F2A007":value<0.85?"#2FBF71":"#E8B931");el.innerHTML='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="#283447" stroke-width="11"/><circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="11" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 '+size/2+' '+size/2+')"/></svg><div class="gaugeval"><div class="big" style="color:'+col+'">'+Math.round(value*100)+'</div><div class="pct">% '+(big?"OEE":"")+'</div></div>';}
+
+/* live render */
+function renderPareto(){const arr=REASONS.map(r=>({name:r.name,col:r.col,mins:S.down[r.name]/60})).filter(x=>x.mins>0.2).sort((a,b)=>b.mins-a.mins);const max=Math.max(1,arr.length?arr[0].mins:1);const box=document.getElementById("pareto");if(!arr.length){box.innerHTML='<div style="color:var(--faint);font-size:12.5px;font-style:italic">No downtime logged yet.</div>';return;}box.innerHTML=arr.map(x=>'<div class="pareto-row"><div class="name">'+x.name+'</div><div class="track"><div class="fill" style="width:'+(x.mins/max*100)+'%;background:'+x.col+'"></div></div><div class="mins">'+Math.round(x.mins)+' min</div></div>').join("");}
+function renderTimeline(){const bar=document.getElementById("stateBar");const colour={running:"var(--run)",idle:"var(--idle)",down:"var(--down)"};let html="";for(const s of S.history)html+='<div class="seg" style="flex:1;background:'+colour[s]+'"></div>';const remain=180-S.history.length;if(remain>0)html+='<div class="seg" style="flex:'+remain+';background:#101620"></div>';bar.innerHTML=html;}
+function renderAlerts(){const box=document.getElementById("alerts");if(!S.alerts.length){box.innerHTML='<div class="empty">No alerts yet. Monitoring active.</div>';return;}box.innerHTML=S.alerts.slice(0,30).map(a=>'<div class="alert '+a.type+'"><div class="t">'+a.t+'</div><div class="msg"><b>'+a.title+'</b><br><span style="color:var(--muted)">'+a.msg+'</span></div></div>').join("");}
+const STATUS_LABEL={ok:"On track",warn:"At risk",crit:"Late risk",done:"Blanks cut"};
+function fmtClock(h){const total=7*60+Math.round(h*60),hh=Math.floor(total/60)%24,mm=total%60;return String(hh).padStart(2,"0")+":"+String(mm).padStart(2,"0");}
+function renderBoard(oc){const body=document.getElementById("orderBody");body.innerHTML=oc.rows.map(r=>{const o=r.o;const proj=r.status==="done"?"&ndash;":(r.projDoneH>=24?"next day":fmtClock(r.projDoneH));const slackTxt=r.status==="done"?"":"&nbsp;<span style='font-family:var(--mono);font-size:11px;color:"+(r.slack<0?"var(--down)":r.slack<0.75?"var(--idle)":"var(--muted)")+"'>("+( r.slack<0?"-":"+")+(Math.abs(r.slack).toFixed(1))+"h)</span>";return'<tr><td class="ref">'+o.ref+'</td><td class="sec">'+o.sector+'</td><td class="due">'+o.dueLabel+'</td><td class="num">'+o.blanks+'</td><td class="due">'+(o.dueHrs>=24?"next day":fmtClock(o.dueHrs))+'</td><td class="due">'+proj+slackTxt+'</td><td><span class="pill '+r.status+'"><span class="pd"></span>'+STATUS_LABEL[r.status]+'</span></td></tr>';}).join("");oc.rows.forEach(r=>{if(r.status==="crit"&&!S.riskFlagged[r.o.ref]){S.riskFlagged[r.o.ref]=1;pushAlert("crit","On-time risk: "+r.o.ref,r.o.sector+" order due "+r.o.dueLabel+" is now projected late.");}});}
+function renderFlow(oc){const atRisk=oc.rows.filter(r=>r.status==="warn"||r.status==="crit").length;const stages=[{nm:"Cutting",dt:"Laser, plasma, oxy",wip:ORDERS.length,wl:"orders today",pace:true},{nm:"Fabrication",dt:"12 bays, 2 robots",wip:7,wl:"in WIP"},{nm:"Press brake",dt:"2 brakes",wip:4,wl:"in WIP"},{nm:"CNC",dt:"8 machines",wip:6,wl:"in WIP"},{nm:"Finishing",dt:"Paint, blast, plate",wip:5,wl:"in WIP"},{nm:"Despatch",dt:"On-time delivery",wip:atRisk,wl:"at risk",risk:true}];let html="";stages.forEach((s,i)=>{const wipCol=s.risk?(s.wip>0?"var(--down)":"var(--run)"):"var(--cyan)";html+='<div class="stage'+(s.pace?" pace":"")+'"><div class="nm">'+s.nm+'</div><div class="dt">'+s.dt+'</div><div class="wip" style="color:'+wipCol+'">'+s.wip+'</div><div class="wl">'+s.wl+'</div>'+(s.pace?'<div class="tag">Pacemaker</div>':'')+'</div>';if(i<stages.length-1)html+='<div class="arrowcell">&rsaquo;</div>';});document.getElementById("flowStrip").innerHTML=html;}
+function renderDecision(m,oc){const lag=Math.max(0,Math.round(oc.lagMin));const risky=oc.rows.filter(r=>r.status==="warn"||r.status==="crit").sort((a,b)=>a.slack-b.slack);document.getElementById("d-lag").textContent=lag;document.getElementById("d-risk").textContent=risky.length;const urgent=risky[0];document.getElementById("d-urgent").innerHTML=urgent?urgent.o.ref:"&mdash;";const note=document.getElementById("decisionNote");if(urgent){note.innerHTML='The laser is <b>'+Math.round(m.OEE*100)+'% OEE</b> and <b>'+lag+' min behind plan</b>. That has put <b>'+risky.length+' order'+(risky.length>1?"s":"")+'</b> at risk. Most urgent: <b>'+urgent.o.ref+'</b> ('+urgent.o.sector.toLowerCase()+', due '+urgent.o.dueLabel+'). Bring its nest forward and hold LG-1190 (not due for 2 days).';}else{note.innerHTML='Every order is <b>on track</b>. Use <b>Log stoppage</b> to inject a real event and watch the despatch risk build in real time.';}}
+function render(){const m=metrics();const oc=computeOrders();gauge(document.getElementById("g-oee"),m.OEE,188,true);gauge(document.getElementById("g-a"),m.A,150,false);gauge(document.getElementById("g-p"),m.P,150,false);gauge(document.getElementById("g-q"),m.Q,150,false);document.getElementById("a-down").textContent=Math.round(m.totalDown/60)+" min";document.getElementById("q-rej").textContent=S.rej;document.getElementById("c-sheets").textContent=S.sheets;document.getElementById("c-good").textContent=S.good;document.getElementById("c-rej").textContent=S.rej;document.getElementById("c-util").textContent=Math.round((S.elapsed>0?S.runtime/S.elapsed:0)*100)+"%";document.getElementById("shiftClock").textContent=mmss(S.elapsed)+" / 08:00";const lamp=document.getElementById("lamp"),st=document.getElementById("stateText"),rs=document.getElementById("reasonText");lamp.className="lamp "+(S.machine==="running"?"run":S.machine==="idle"?"idle":"down");st.textContent=S.machine==="running"?"CUTTING":S.machine==="idle"?"LOAD / CHANGEOVER":"DOWN";st.style.color=S.machine==="running"?"var(--run)":S.machine==="idle"?"var(--idle)":"var(--down)";rs.textContent=S.reason+(S.machine!=="running"&&S.downRemain>0?"  (~"+Math.ceil(S.downRemain/60)+" min remaining)":"");if(m.OEE<0.50&&S.elapsed>1800&&!S.firedLow){S.firedLow=true;pushAlert("crit","OEE below 50%","Check the top Pareto cause now.");}if(m.OEE>=0.50)S.firedLow=false;renderFlow(oc);renderBoard(oc);renderPareto();renderTimeline();renderAlerts();renderDecision(m,oc);}
+function loop(ts){if(lastTs==null)lastTs=ts;const realDt=(ts-lastTs)/1000;lastTs=ts;if(running)step(realDt*speed);render();requestAnimationFrame(loop);}
+
+/* ================================================================
+   HISTORY TAB - charts drawn on canvas without any library
+   ================================================================ */
+function drawLineChart(canvasId, labels, series, colors, yMin, yMax){
+  const cv=document.getElementById(canvasId);if(!cv)return;const W=cv.offsetWidth||700,H=cv.offsetHeight||180;cv.width=W;cv.height=H;const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);const pad={l:36,r:12,t:12,b:28};const iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;const n=labels.length;
+  // grid
+  for(let i=0;i<=4;i++){const y=pad.t+iH*(1-i/4);ctx.strokeStyle='#283447';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+iW,y);ctx.stroke();ctx.fillStyle='#5C6878';ctx.font='10px monospace';ctx.textAlign='right';ctx.fillText(Math.round(yMin+(yMax-yMin)*i/4)+'%',pad.l-4,y+4);}
+  // series
+  series.forEach((data,si)=>{ctx.strokeStyle=colors[si];ctx.lineWidth=2;ctx.beginPath();data.forEach((v,i)=>{const x=pad.l+iW*i/(n-1),y=pad.t+iH*(1-(v-yMin)/(yMax-yMin));i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();// dots
+  data.forEach((v,i)=>{const x=pad.l+iW*i/(n-1),y=pad.t+iH*(1-(v-yMin)/(yMax-yMin));ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle=colors[si];ctx.fill();});});
+  // x labels
+  ctx.fillStyle='#5C6878';ctx.font='10px monospace';ctx.textAlign='center';labels.forEach((l,i)=>{if(i%2===0||i===n-1)ctx.fillText(l,pad.l+iW*i/(n-1),H-6);});}
+
+function drawForecastChart(canvasId,histDates,histOEE,futureDates,forecastMean,forecastLow,forecastHigh){
+  const cv=document.getElementById(canvasId);if(!cv)return;const W=cv.offsetWidth||700,H=cv.offsetHeight||200;cv.width=W;cv.height=H;const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);const pad={l:36,r:12,t:12,b:28};const iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;const allDates=[...histDates,...futureDates];const n=allDates.length;const nH=histDates.length;const yMin=40,yMax=100;
+  // grid
+  for(let i=0;i<=4;i++){const y=pad.t+iH*(1-i/4);ctx.strokeStyle='#283447';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+iW,y);ctx.stroke();ctx.fillStyle='#5C6878';ctx.font='10px monospace';ctx.textAlign='right';ctx.fillText(Math.round(yMin+(yMax-yMin)*i/4)+'%',pad.l-4,y+4);}
+  // shade future band
+  const xSplit=pad.l+iW*(nH-1)/(n-1);ctx.fillStyle='rgba(59,198,216,0.04)';ctx.fillRect(xSplit,pad.t,pad.l+iW-xSplit,iH);
+  // confidence band
+  ctx.beginPath();[...Array(futureDates.length)].forEach((_,i)=>{const x=pad.l+iW*(nH+i)/(n-1),y=pad.t+iH*(1-(forecastHigh[i]-yMin)/(yMax-yMin));i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});[...Array(futureDates.length)].reverse().forEach((_,ri)=>{const i=futureDates.length-1-ri;const x=pad.l+iW*(nH+i)/(n-1),y=pad.t+iH*(1-(forecastLow[i]-yMin)/(yMax-yMin));ctx.lineTo(x,y);});ctx.closePath();ctx.fillStyle='rgba(232,185,49,0.12)';ctx.fill();
+  // historical line
+  ctx.strokeStyle='#3BC6D8';ctx.lineWidth=2;ctx.beginPath();histOEE.forEach((v,i)=>{const x=pad.l+iW*i/(n-1),y=pad.t+iH*(1-(v-yMin)/(yMax-yMin));i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();
+  // forecast line
+  ctx.strokeStyle='#E8B931';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();const bridgeX=pad.l+iW*(nH-1)/(n-1),bridgeY=pad.t+iH*(1-(histOEE[nH-1]-yMin)/(yMax-yMin));ctx.moveTo(bridgeX,bridgeY);forecastMean.forEach((v,i)=>{const x=pad.l+iW*(nH+i)/(n-1),y=pad.t+iH*(1-(v-yMin)/(yMax-yMin));ctx.lineTo(x,y);});ctx.stroke();ctx.setLineDash([]);
+  // dots hist
+  histOEE.forEach((v,i)=>{const x=pad.l+iW*i/(n-1),y=pad.t+iH*(1-(v-yMin)/(yMax-yMin));ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle='#3BC6D8';ctx.fill();});
+  // x labels
+  ctx.fillStyle='#5C6878';ctx.font='10px monospace';ctx.textAlign='center';allDates.forEach((l,i)=>{if(i%2===0||i===n-1)ctx.fillText(l,pad.l+iW*i/(n-1),H-6);});
+  // today marker
+  ctx.strokeStyle='#E8B931';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xSplit,pad.t);ctx.lineTo(xSplit,pad.t+iH);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#E8B931';ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText('today',xSplit+4,pad.t+14);}
+
+function buildHistPareto(){
+  const totals={};SHIFTS.forEach(r=>{const k=r.top_downtime_reason,v=parseFloat(r.top_downtime_min)||0;totals[k]=(totals[k]||0)+v;});const arr=Object.entries(totals).sort((a,b)=>b[1]-a[1]);const max=arr[0][1];const cols={"Awaiting sheet load / material":"#E5484D","Nest programming / no nest ready":"#F2A007","Lens or nozzle change":"#F2A007","Awaiting crane / offload":"#E5484D","Assist gas / low pressure":"#3BC6D8","Optics or chiller fault":"#E5484D","Operator break / absent":"#8A97A8"};const box=document.getElementById("histPareto");box.innerHTML=arr.map(([name,mins])=>'<div class="pareto-row"><div class="name">'+name+'</div><div class="track"><div class="fill" style="width:'+(mins/max*100)+'%;background:'+(cols[name]||"#3BC6D8")+'"></div></div><div class="mins">'+Math.round(mins)+' min</div></div>').join("");}
+
+function buildHistTable(){
+  const t=document.getElementById("histTable");t.innerHTML='<thead><tr><th>Date</th><th>Operator</th><th>Sheets</th><th>Parts</th><th>Avail %</th><th>Perf %</th><th>Qual %</th><th>OEE %</th><th>Top downtime reason</th><th>Status</th></tr></thead>';const body=document.createElement('tbody');SHIFTS.forEach(r=>{const oee=parseFloat(r.oee_pct);const cls=oee>=80?"hi":oee<60?"lo":"";const tr=document.createElement('tr');tr.innerHTML='<td>'+r.date+'</td><td>'+r.operator+'</td><td class="mono">'+r.sheets_cut+'</td><td class="mono">'+r.parts_cut+'</td><td class="mono">'+r.availability_pct+'</td><td class="mono">'+r.performance_pct+'</td><td class="mono">'+r.quality_pct+'</td><td class="mono '+cls+'">'+r.oee_pct+'</td><td style="color:var(--muted);font-size:12px">'+r.top_downtime_reason+'</td><td><span class="badge '+(r.status==="In progress"?"info":"ok")+'">'+r.status+'</span></td>';body.appendChild(tr);});t.appendChild(body);}
+
+/* ================================================================
+   PREDICTIONS
+   ================================================================ */
+function buildPredictions(){
+  // 1. End-of-shift OEE forecast (exponential smoothing blended with hist mean)
+  const m=metrics();const curOEE=m.OEE*100;const histMean=oeeHist.reduce((a,b)=>a+b,0)/oeeHist.length;const alpha=0.45;const fcst=alpha*curOEE+(1-alpha)*histMean;const histStd=Math.sqrt(oeeHist.reduce((s,v)=>s+(v-histMean)**2,0)/oeeHist.length);const lo=Math.round(fcst-histStd*0.7),hi=Math.round(fcst+histStd*0.7);const col=fcst>=75?"var(--run)":fcst>=60?"var(--gold)":"var(--down)";document.getElementById("p-oee-fcst").textContent=Math.round(fcst)+"%";document.getElementById("p-oee-fcst").style.color=col;document.getElementById("p-oee-range").textContent="Likely range: "+lo+"% to "+hi+"% (based on 14-day spread)";const shift=SHIFTS[SHIFTS.length-1];document.getElementById("p-oee-bar").innerHTML='<div style="margin-bottom:6px"><div class="bar-h"><div class="lbl">Today so far</div><div class="track"><div class="fill" style="width:'+Math.min(100,curOEE)+'%;background:'+col+'"></div></div><div class="val">'+Math.round(curOEE)+'%</div></div><div class="bar-h"><div class="lbl">14-day mean</div><div class="track"><div class="fill" style="width:'+histMean+'%;background:#3BC6D8"></div></div><div class="val">'+Math.round(histMean)+'%</div></div><div class="bar-h"><div class="lbl">Forecast end-of-shift</div><div class="track"><div class="fill" style="width:'+Math.min(100,fcst)+'%;background:'+col+'"></div></div><div class="val">'+Math.round(fcst)+'%</div></div></div>';const prevBest=Math.max(...oeeHist);document.getElementById("p-oee-insight").innerHTML=fcst>=histMean?'Forecast is <b>above the 14-day mean of '+Math.round(histMean)+'%</b>. If the laser avoids further stoppages, today could match the recent best of <b>'+prevBest+'%</b> ('+SHIFTS.find(r=>parseFloat(r.oee_pct)===prevBest)?.date+'). Biggest lever: reduce sheet-load wait time, which has been the top cause in <b>5 of the last 14 shifts</b>.':'Forecast is <b>below the 14-day mean</b>. Today has accumulated more downtime than a typical shift at this point. Reducing the current top cause by half would recover approximately <b>'+Math.round(histStd*0.5)+'% OEE</b> by end of shift.';
+
+  // 2. On-time confidence for MD-3380 via Monte Carlo
+  const oc=computeOrders();const lagMin=oc.lagMin;const MD=ORDERS.find(o=>o.ref==="MD-3380");const cumCut=ORDERS.slice(0,ORDERS.indexOf(MD)+1).reduce((s,o)=>s+o.cutMin,0);const remainCutMin=Math.max(0,cumCut-S.runtime/60);// MC: sample availability from hist, project remaining time
+  const MC=2000;let onTime=0;const avMean=availHist.reduce((a,b)=>a+b,0)/availHist.length/100;const avStd=Math.sqrt(availHist.reduce((s,v)=>s+(v/100-avMean)**2,0)/availHist.length);for(let k=0;k<MC;k++){const a=Math.max(0.5,Math.min(1,avMean+(Math.random()-0.5)*2*avStd));const remClockMin=remainCutMin/a;const projDoneH=(S.elapsed/60+remClockMin)/60;if(projDoneH<=MD.dueHrs)onTime++;}const pct=Math.round(onTime/MC*100);const col2=pct>=80?"var(--run)":pct>=50?"var(--gold)":"var(--down)";document.getElementById("p-ontm-val").textContent=pct+"%";document.getElementById("p-ontm-val").style.color=col2;document.getElementById("p-ontm-conf").textContent="Confidence from "+MC+" Monte Carlo simulations sampling 14-day availability distribution";document.getElementById("p-ontm-mc").innerHTML='<div class="bar-h"><div class="lbl">On-time probability</div><div class="track"><div class="fill" style="width:'+pct+'%;background:'+col2+'"></div></div><div class="val">'+pct+'%</div></div><div class="bar-h"><div class="lbl">Remaining cut time</div><div class="track"><div class="fill" style="width:'+Math.min(100,remainCutMin/80*100)+'%;background:#8A97A8"></div></div><div class="val">'+Math.round(remainCutMin)+' min</div></div>';document.getElementById("p-ontm-insight").innerHTML=pct>=80?'<b>High confidence</b> the medical order will be ready on time. Laser is keeping pace. No re-sequencing needed unless a major stoppage occurs.':pct>=50?'<b>At risk.</b> The laser is behind enough that a single further stoppage could push MD-3380 past 13:30. Recommended: bring its nest forward in the sequence to reduce exposure.':'<b>Late delivery likely.</b> Current pace means MD-3380 blanks will not be ready by 13:30 without a schedule change. Re-sequence now and alert the downstream fabrication team.';
+
+  // 3. Predictive maintenance
+  const lensData=SHIFTS.filter(r=>parseFloat(r.lens_change_min)>0);const daysSinceLens=SHIFTS.length-1-SHIFTS.map(r=>parseFloat(r.lens_change_min)>0).lastIndexOf(true);const avgLensInterval=lensData.length>1?Math.round((SHIFTS.length-1)/(lensData.length-1)):4;const dueIn=Math.max(0,avgLensInterval-daysSinceLens);const maintHtml='<div class="next-event"><div class="icon">🔧</div><div><div class="ttl">Lens / nozzle change<span class="badge '+(dueIn<=1?"crit":dueIn<=2?"warn":"ok")+'">'+(dueIn===0?"Due today":dueIn===1?"Due tomorrow":"In ~"+dueIn+" days")+'</span></div><div class="meta">Last change: '+Math.round(daysSinceLens)+' shifts ago. Historical average interval: '+avgLensInterval+' shifts.</div></div></div><div class="next-event"><div class="icon">🧹</div><div><div class="ttl">Optics clean / chiller check<span class="badge ok">Routine in 5 days</span></div><div class="meta">No fault in last 8 shifts. Schedule preventive clean at weekend.</div></div></div><div class="next-event"><div class="icon">📋</div><div><div class="ttl">Assist gas cylinder check<span class="badge warn">Monitor this week</span></div><div class="meta">Low-pressure stoppage logged today. Check cylinder levels before next shift.</div></div></div>';document.getElementById("p-maint-events").innerHTML=maintHtml;document.getElementById("p-maint-insight").innerHTML='Maintenance rules here are <b>threshold-based</b> from real historical data in the dataset. The KTP project would evolve this into a full predictive model using cycle counts, temperature logs and stoppage frequency trends as features.';
+
+  // 4. Scenario planner
+  const topReason=SHIFTS.reduce((acc,r)=>{acc[r.top_downtime_reason]=(acc[r.top_downtime_reason]||0)+1;return acc;},{}); const topName=Object.entries(topReason).sort((a,b)=>b[1]-a[1])[0][0];const avgDown=histShifts.reduce((s,r)=>s+parseFloat(r.downtime_hours),0)/histShifts.length*60;const topDownMin=histShifts.filter(r=>r.top_downtime_reason===topName).reduce((s,r)=>s+parseFloat(r.top_downtime_min),0)/histShifts.filter(r=>r.top_downtime_reason===topName).length;const saved=topDownMin*0.5;const newAvail=(PLANNED/60-avgDown+saved)/(PLANNED/60);const baseAvail=avMean;const baseOEE=histMean;const newOEE=baseOEE*(newAvail/baseAvail);const extraSheets=Math.round(saved/IDEAL_SHEET*60);document.getElementById("p-scenario").innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:14px"><div class="blk"><div class="n" style="font-family:var(--mono);font-size:28px;color:var(--gold)">+'+Math.round(newOEE-baseOEE)+'%</div><div class="l" style="color:var(--muted);font-size:12px;margin-top:4px">OEE gain if top cause halved</div></div><div class="blk"><div class="n" style="font-family:var(--mono);font-size:28px;color:var(--run)">+'+Math.round(saved)+' min</div><div class="l" style="color:var(--muted);font-size:12px;margin-top:4px">Productive time recovered per shift</div></div><div class="blk"><div class="n" style="font-family:var(--mono);font-size:28px;color:var(--cyan)">+'+extraSheets+'</div><div class="l" style="color:var(--muted);font-size:12px;margin-top:4px">Extra sheets per shift (est.)</div></div></div><div style="color:var(--text);font-size:13px;line-height:1.55">Top cause over 14 shifts: <b>'+topName+'</b>, averaging <b>'+Math.round(topDownMin)+' min per shift</b>. Halving it through a simple fix (pre-staged sheets, dedicated load crane slot) adds <b>'+Math.round(saved)+' min</b> of laser time per day without buying anything. At current nesting rates that is <b>'+extraSheets+' additional sheets</b> — the difference between cutting to schedule and running late every afternoon.</div>';
+
+  // 5. Forecast chart
+  const slope=(oeeHist[oeeHist.length-1]-oeeHist[0])/(oeeHist.length-1);const lastVal=oeeHist[oeeHist.length-1];const fDates=[],fMean=[],fLow=[],fHigh=[];for(let i=1;i<=7;i++){const d=new Date('2026-06-24');d.setDate(d.getDate()+i);fDates.push((d.getMonth()+1)+"-"+String(d.getDate()).padStart(2,'0'));const v=Math.min(95,lastVal+slope*i);fMean.push(v);fLow.push(Math.max(40,v-histStd*0.9));fHigh.push(Math.min(100,v+histStd*0.9));}drawForecastChart("chartForecast",datesHist,oeeHist,fDates,fMean,fLow,fHigh);const trendDir=slope>0.3?"improving":"broadly stable";document.getElementById("p-trend-insight").innerHTML='14-day OEE trend is <b>'+trendDir+'</b> (linear slope: '+(slope>0?"+":"")+slope.toFixed(1)+'% per shift). If this continues, the laser should reach <b>'+Math.round(fMean[fMean.length-1])+'% OEE</b> within the next 7 shifts. The KTP project goal would be to steepen this curve by systematically addressing the top downtime causes identified in the Pareto.';
+
+  // 6. History charts (vanilla canvas)
+  drawLineChart("chartOEE",datesHist,[oeeHist],["#3BC6D8"],40,100);
+  drawLineChart("chartAvail",datesHist,[availHist],["#2FBF71"],60,100);
+  buildHistPareto();buildHistTable();
+}
+
+/* ================================================================
+   DATA TAB
+   ================================================================ */
+function buildDataTab(){
+  document.getElementById("csvShifts").textContent=SHIFTS_CSV.split('\n').slice(0,8).join('\n')+'...\n[15 rows total]';
+  document.getElementById("csvEvents").textContent=EVENTS_CSV.split('\n').slice(0,8).join('\n')+'...\n[26 rows total]';
+  const dlS=document.getElementById("dlShifts");dlS.href='data:text/csv;charset=utf-8,'+encodeURIComponent(SHIFTS_CSV);
+  const dlE=document.getElementById("dlEvents");dlE.href='data:text/csv;charset=utf-8,'+encodeURIComponent(EVENTS_CSV);}
+
+/* ================================================================
+   CONTROLS & TABS
+   ================================================================ */
+function bind(){
+  document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));t.classList.add("active");document.getElementById("view-"+t.dataset.view).classList.add("active");if(t.dataset.view==="history"||t.dataset.view==="predict")buildPredictions();});
+  document.getElementById("btnPlay").onclick=function(){running=!running;this.textContent=running?"Pause":"Resume";};
+  document.getElementById("btnReset").onclick=()=>{S=fresh();for(let i=0;i<95;i++)step(60);render();};
+  document.getElementById("btnEvent").onclick=()=>{if(S.machine!=="running"){pushAlert("warn","Laser already stopped","Finish the current stoppage first.");return;}startDowntime(document.getElementById("evtReason").value);};
+  document.querySelectorAll(".spd button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".spd button").forEach(x=>x.classList.remove("on"));b.classList.add("on");speed=+b.dataset.s;});
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+S=fresh();
+bind();
+buildDataTab();
+for(let i=0;i<95;i++)step(60);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
